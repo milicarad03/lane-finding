@@ -1,0 +1,25 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python caches and tooling
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated project artifacts
+calibration_data/
+output_images/
+output_videos/
+
+# Temporary and editor files
+*.tmp
+*.temp
+*~
+.DS_Store
+.idea/
+.vscode/

@@ -1,10 +1,10 @@
 ## Writeup Template
 
-### You can use this file as a template for your writeup if you want to submit it as a markdown file, but feel free to use some other method and submit a pdf if you prefer.
+### You use this file as a template for your writeup.
 
 ---
 
-**Advanced Lane Finding Project**
+**Lane Finding Project**
 
 The goals / steps of this project are the following:
 
@@ -16,23 +16,12 @@ The goals / steps of this project are the following:
 * Determine the curvature of the lane and vehicle position with respect to center.
 * Warp the detected lane boundaries back onto the original image.
 * Output visual display of the lane boundaries and numerical estimation of lane curvature and vehicle position.
-
 [//]: # (Image References)
 
 [calibration-corners]: ./output_images/calibration/corners/corners_example.jpg "Detected chessboard corners"
 [calibration-comparison]: ./output_images/calibration/original_vs_undistorted.jpg "Original and undistorted calibration image"
 
-## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
-
-### Here I will consider the rubric points individually and describe how I addressed each point in my implementation.
-
 ---
-
-### Writeup / README
-
-#### 1. Provide a Writeup / README that includes all the rubric points and how you addressed each one. You can submit your writeup as markdown or pdf.
-
-This document follows the supplied project template. Step 1 is documented below; all later pipeline sections remain TODO until their corresponding functionality is implemented.
 
 ### Camera Calibration
 
@@ -52,7 +41,7 @@ The implementation uses `cv2.getOptimalNewCameraMatrix()` followed by `cv2.undis
 
 ![Original and undistorted calibration image][calibration-comparison]
 
-The calibration program processed all 20 input images and successfully detected the complete chessboard pattern in 15 of them. Three images—`calibration1.jpg`, `calibration4.jpg`, and `calibration5.jpg`—were skipped because `cv2.findChessboardCorners()` could not detect the complete pattern. Two more images—`calibration7.jpg` and `calibration15.jpg`—were skipped because their resolution was 1281 by 721 pixels rather than the expected 1280 by 720 pixels. Images with inconsistent dimensions cannot safely be combined in one calibration because `cv2.calibrateCamera()` expects all collected image points to use the same image coordinate system.
+The calibration program examined 20 input images, of which 15 were successfully used for camera calibration. Three images—`calibration1.jpg`, `calibration4.jpg`, and `calibration5.jpg`—were skipped because `cv2.findChessboardCorners()` could not detect the complete pattern. Two more images—`calibration7.jpg` and `calibration15.jpg`—were skipped because their resolution was 1281 by 721 pixels rather than the expected 1280 by 720 pixels. Images with inconsistent dimensions cannot safely be combined in one calibration because `cv2.calibrateCamera()` expects all collected image points to use the same image coordinate system.
 
 The calculated camera matrix was:
 
@@ -75,7 +64,19 @@ The RMS reprojection error was **0.852880 pixels**. Manual inspection of the gen
 
 #### 1. Provide an example of a distortion-corrected image.
 
-TODO — future project step.
+The implementation for this step is located in `src/undistort.py`. It loads the camera matrix, distortion coefficients, and calibration image size from `calibration_data/calibration.npz`; it does not hardcode or recalculate the camera parameters. The input image resolution is checked against the saved calibration resolution before correction so incompatible parameters are not applied silently.
+
+The reusable `undistort_image()` function passes an already-loaded image together with the saved camera matrix and distortion coefficients to `cv2.undistort()`. Keeping this operation independent of file input/output allows later stages of the lane-finding pipeline to apply the same correction to their image frames.
+
+Correcting lens distortion before lane detection is necessary because radial and tangential distortion can bend straight lane markings and shift their apparent pixel positions, especially near the image boundaries. Removing that distortion gives the later perspective transformation and lane-geometry calculations a more accurate image.
+
+For the default `test_images/test1.jpg` input, the corrected road image is written to `output_images/undistortion/test1_undistorted.jpg`. A labelled side-by-side comparison of the original and corrected images is written to `output_images/undistortion/test1_comparison.jpg`.
+
+![Original and undistorted road image][road-undistortion-comparison]
+
+[road-undistortion-comparison]: ./output_images/undistortion/test1_comparison.jpg "Original and undistorted road image"
+
+Manual testing was completed by running `python src/undistort.py`. The program successfully processed `test_images/test1.jpg` at its 1280 by 720 pixel resolution and generated `output_images/undistortion/test1_undistorted.jpg` and `output_images/undistortion/test1_comparison.jpg`. Visual inspection confirmed that the corrected road image looks natural, the lane markings remain clearly visible, and there are no obvious distortion artifacts.
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients, or other methods to create a thresholded binary image. Provide an example of a binary image result.
 

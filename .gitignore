@@ -13,8 +13,12 @@ __pycache__/
 
 # Generated project artifacts
 calibration_data/
-output_images/
 output_videos/
+/local_archive/
+
+# Local experimental utilities
+/src/roi_lane_comparison.py
+/src/threshold_diagnostics.py
 
 # Temporary and editor files
 *.tmp

@@ -32,8 +32,8 @@ SOURCE_POINT_RATIOS = np.float32(
     [
         [585 / 1280, 460 / 720],  # top-left
         [705 / 1280, 460 / 720],  # top-right
-        [1015 / 1280, 650 / 720], # bottom-right
-        [310 / 1280, 650 / 720],  # bottom-left
+        [1095 / 1280, 700 / 720], # bottom-right
+        [240 / 1280, 700 / 720],  # bottom-left
     ]
 )
 DESTINATION_POINT_RATIOS = np.float32(

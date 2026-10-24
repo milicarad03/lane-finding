@@ -1,0 +1,157 @@
+Full pipeline batch summary
+Total images found: 17
+Successfully processed images: 17
+Failed images: 0
+
+challange00101.jpg
+  Left curvature: 9996.94 m
+  Right curvature: 872.38 m
+  Vehicle offset: -0.178 m
+  Vehicle position: left of the estimated lane center
+  Sampled lane-width range: 480.40-514.11 pixels
+  Sampled lane-width variation: 6.86%
+  Geometry warning: none
+
+challange00111.jpg
+  Left curvature: 1162.30 m
+  Right curvature: 553.83 m
+  Vehicle offset: -0.138 m
+  Vehicle position: left of the estimated lane center
+  Sampled lane-width range: 511.37-532.01 pixels
+  Sampled lane-width variation: 3.98%
+  Geometry warning: none
+
+challange00136.jpg
+  Left curvature: 860.61 m
+  Right curvature: 1327.45 m
+  Vehicle offset: +0.055 m
+  Vehicle position: right of the estimated lane center
+  Sampled lane-width range: 504.79-515.16 pixels
+  Sampled lane-width variation: 2.03%
+  Geometry warning: none
+
+solidWhiteCurve.jpg
+  Left curvature: 4002.18 m
+  Right curvature: 8670.68 m
+  Vehicle offset: -0.193 m
+  Vehicle position: left of the estimated lane center
+  Sampled lane-width range: 491.39-578.40 pixels
+  Sampled lane-width variation: 16.33%
+  Geometry warning: lane-width variation exceeds 10%
+
+solidWhiteRight.jpg
+  Left curvature: 5381.59 m
+  Right curvature: 2414.84 m
+  Vehicle offset: +0.027 m
+  Vehicle position: right of the estimated lane center
+  Sampled lane-width range: 481.83-579.58 pixels
+  Sampled lane-width variation: 18.44%
+  Geometry warning: lane-width variation exceeds 10%
+
+solidYellowCurve.jpg
+  Left curvature: 4176.95 m
+  Right curvature: 31833.60 m
+  Vehicle offset: -0.018 m
+  Vehicle position: left of the estimated lane center
+  Sampled lane-width range: 478.68-536.62 pixels
+  Sampled lane-width variation: 11.47%
+  Geometry warning: lane-width variation exceeds 10%
+
+solidYellowCurve2.jpg
+  Left curvature: 10561.06 m
+  Right curvature: 2961.14 m
+  Vehicle offset: -0.050 m
+  Vehicle position: left of the estimated lane center
+  Sampled lane-width range: 483.15-560.89 pixels
+  Sampled lane-width variation: 14.91%
+  Geometry warning: lane-width variation exceeds 10%
+
+solidYellowLeft.jpg
+  Left curvature: 3080.08 m
+  Right curvature: 1700.30 m
+  Vehicle offset: +0.018 m
+  Vehicle position: right of the estimated lane center
+  Sampled lane-width range: 491.06-609.51 pixels
+  Sampled lane-width variation: 21.82%
+  Geometry warning: lane-width variation exceeds 10%
+
+straight_lines1.jpg
+  Left curvature: 3095.89 m
+  Right curvature: 7753.57 m
+  Vehicle offset: +0.058 m
+  Vehicle position: right of the estimated lane center
+  Sampled lane-width range: 624.43-634.57 pixels
+  Sampled lane-width variation: 1.61%
+  Geometry warning: none
+
+straight_lines2.jpg
+  Left curvature: 3765.40 m
+  Right curvature: 60727.06 m
+  Vehicle offset: +0.031 m
+  Vehicle position: right of the estimated lane center
+  Sampled lane-width range: 620.19-655.32 pixels
+  Sampled lane-width variation: 5.51%
+  Geometry warning: none
+
+test1.jpg
+  Left curvature: 21876.87 m
+  Right curvature: 1433.47 m
+  Vehicle offset: -0.101 m
+  Vehicle position: left of the estimated lane center
+  Sampled lane-width range: 642.09-701.70 pixels
+  Sampled lane-width variation: 8.95%
+  Geometry warning: none
+
+test2.jpg
+  Left curvature: 648.96 m
+  Right curvature: 2586.16 m
+  Vehicle offset: -0.339 m
+  Vehicle position: left of the estimated lane center
+  Sampled lane-width range: 628.38-652.68 pixels
+  Sampled lane-width variation: 3.81%
+  Geometry warning: none
+
+test3.jpg
+  Left curvature: 1250.32 m
+  Right curvature: 922.23 m
+  Vehicle offset: -0.076 m
+  Vehicle position: left of the estimated lane center
+  Sampled lane-width range: 627.70-634.00 pixels
+  Sampled lane-width variation: 1.00%
+  Geometry warning: none
+
+test4.jpg
+  Left curvature: 1428.60 m
+  Right curvature: 524.35 m
+  Vehicle offset: -0.261 m
+  Vehicle position: left of the estimated lane center
+  Sampled lane-width range: 647.88-690.49 pixels
+  Sampled lane-width variation: 6.44%
+  Geometry warning: none
+
+test5.jpg
+  Left curvature: 954.95 m
+  Right curvature: 4565.67 m
+  Vehicle offset: +0.067 m
+  Vehicle position: right of the estimated lane center
+  Sampled lane-width range: 675.51-700.41 pixels
+  Sampled lane-width variation: 3.60%
+  Geometry warning: none
+
+test6.jpg
+  Left curvature: 749.69 m
+  Right curvature: 741.86 m
+  Vehicle offset: -0.225 m
+  Vehicle position: left of the estimated lane center
+  Sampled lane-width range: 626.84-654.11 pixels
+  Sampled lane-width variation: 4.25%
+  Geometry warning: none
+
+whiteCarLaneSwitch.jpg
+  Left curvature: 7805.85 m
+  Right curvature: 2641.09 m
+  Vehicle offset: -0.144 m
+  Vehicle position: left of the estimated lane center
+  Sampled lane-width range: 486.05-527.98 pixels
+  Sampled lane-width variation: 8.31%
+  Geometry warning: none

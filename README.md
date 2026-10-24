@@ -1,231 +1,253 @@
-# Advanced Lane Finding
+# Advanced Lane Finding Project
 
-This university project develops an image-processing pipeline for identifying lane boundaries from a vehicle-mounted camera. The project is implemented incrementally. The current implementation includes camera calibration, distortion correction, image thresholding, bird's-eye perspective transformation, and lane-pixel detection with polynomial fitting (Steps 1–5). Lane curvature, vehicle offset, lane overlay, and video processing are not yet implemented.
+This project implements a complete computer-vision pipeline for detecting road-lane boundaries in images and video. The pipeline:
 
-## Current project structure
+- calibrates the camera from chessboard photographs;
+- corrects lens distortion;
+- combines HLS color thresholds and a Sobel X gradient;
+- transforms the road into a bird's-eye view;
+- locates lane pixels and fits second-degree polynomials;
+- estimates lane curvature and vehicle position;
+- projects the detected lane area back onto the road;
+- displays the lane, curvature, and vehicle offset on images and video.
+
+I divided the implementation into small reusable modules so that I could inspect each stage separately and reuse the same functions in the complete image and video pipelines.
+
+## Camera Calibration
+
+### 1. Camera matrix and distortion coefficients
+
+Camera calibration is implemented in `src/calibration.py`. The supplied chessboard contains 9 × 6 internal corners. For each calibration photograph, I convert the image to grayscale and use `cv2.findChessboardCorners()` to locate the pattern. I refine successful detections to sub-pixel accuracy with `cv2.cornerSubPix()` and pair them with planar object points whose `z` coordinate is zero.
+
+The collected object/image-point correspondences are passed to `cv2.calibrateCamera()`. The resulting camera matrix, distortion coefficients, rotation and translation vectors, reprojection error, calibration resolution, pattern size, and successful image names are saved in `calibration_data/calibration.npz`.
+
+I examined 20 calibration images and used 15 of them. Corner detection failed on `calibration1.jpg`, `calibration4.jpg`, and `calibration5.jpg`. I excluded `calibration7.jpg` and `calibration15.jpg` because their 1281 × 721 resolution differed from the 1280 × 720 calibration resolution.
+
+The calculated camera matrix is:
 
 ```text
-lane-finding/
-├── camera_cal/                 # Original chessboard calibration photographs
-├── calibration_data/
-│   └── calibration.npz         # Saved camera calibration parameters
-├── examples/                   # Original project examples
-├── src/
-│   ├── calibration.py          # Step 1 calibration program
-│   ├── undistort.py            # Step 2 road-image distortion correction
-│   ├── thresholding.py          # Step 3 color and gradient thresholding
-│   ├── perspective.py           # Step 4 bird's-eye perspective transform
-│   ├── lane_detection.py        # Step 5 sliding windows and polynomial fitting
-│   └── process_all_images.py    # Batch processing and contact sheets (Steps 2–5)
-├── output_images/              # Final demonstration results for Steps 1–5
-│   ├── calibration/
-│   ├── undistortion/
-│   ├── thresholding/
-│   ├── perspective/
-│   ├── lane_detection/
-│   └── batch/
-├── test_images/                # Original test photographs
-├── test_videos/                # Original test videos
-├── .gitignore
-├── README.md
-├── requirements.txt
-├── writeup.md                  # Project report in progress
-└── writeup_template.md         # Original report template
+[[1.15877475e+03 0.00000000e+00 6.69642741e+02]
+ [0.00000000e+00 1.15407661e+03 3.88079450e+02]
+ [0.00000000e+00 0.00000000e+00 1.00000000e+00]]
 ```
 
-The programs create `calibration_data/` and step-specific directories under `output_images/` when they are run. The cleaned `output_images/` directory is included in the repository so all final demonstration results for Steps 1–5 can be inspected. Its subdirectories organize calibration, undistortion, thresholding, perspective-transformation, lane-detection, and batch-processing results, including contact sheets. `writeup.md` uses representative examples rather than embedding every generated image.
+The distortion coefficients are:
 
-## Dependencies
+```text
+[[-2.56779082e-01  4.33845159e-02 -6.87454487e-04
+   1.25769022e-04 -1.15025457e-01]]
+```
 
-- Python 3.10 or newer
-- NumPy
-- OpenCV for Python
+The RMS reprojection error is **0.852880 pixels**. I also inspected the detected corners manually and confirmed that they followed the internal chessboard intersections correctly.
 
-The exact accepted package ranges are listed in `requirements.txt`.
+![Detected and refined chessboard corners](docs/calibration_corners.jpg)
 
-## Environment setup on Ubuntu
+`src/calibration.py` reuses `undistort_image()` from `src/undistort.py` to produce its correction example, ensuring that calibration and later pipeline stages use the same distortion-correction implementation.
 
-From a terminal:
+![Original and corrected calibration photograph](docs/calibration_comparison.jpg)
+
+## Pipeline (single images)
+
+### 1. Distortion correction
+
+Distortion correction is implemented in `src/undistort.py`. `load_calibration()` reads the saved camera matrix, distortion coefficients, and calibration resolution. `undistort_image()` then calls `cv2.undistort()` directly with the camera matrix and distortion coefficients.
+
+For images at the calibration resolution, I use the saved intrinsic matrix unchanged. If an image has the same aspect ratio but was proportionally resized, `scale_camera_matrix()` adjusts `fx` and `cx` by the horizontal scale and `fy` and `cy` by the vertical scale. I scale the camera matrix for images with the same aspect ratio, assuming they were captured by the calibrated camera and only resized. This is not a substitute for calibrating a different camera.
+
+Correcting distortion before detecting lanes prevents radial or tangential lens distortion from shifting the apparent positions of lane markings. Manual inspection of `test1.jpg` showed a natural corrected image, visible lane markings, and no obvious correction artifacts.
+
+![Original and distortion-corrected road image](docs/road_undistortion.jpg)
+
+### 2. Color and gradient thresholding
+
+Thresholding is implemented in `src/thresholding.py`. The undistorted BGR image is converted to HLS once and divided into hue, lightness, and saturation channels.
+
+The white-lane mask selects:
+
+- lightness: 200–255;
+- saturation: 0–80.
+
+The yellow-lane mask selects:
+
+- hue: 15–35 in OpenCV's HLS representation;
+- lightness: 30–255;
+- saturation: 80–255.
+
+I use the Sobel X operator on the HLS lightness channel with a kernel size of 3. Its absolute magnitude is scaled to 0–255 and thresholded from 20 to 100. I include gradient pixels only when their lightness is at least 120, which reduces responses from dark asphalt texture.
+
+`combined_threshold()` joins the white, yellow, and bright-gradient masks and returns an array containing only 0 and 1. During testing, yellow and white lane markings remained visible, including curved and dashed sections. I also noticed responses from vegetation, vehicles, guardrails, and road texture, so the binary image is not a perfect separation of lane and background pixels. All 17 test photographs were processed successfully.
+
+![Original, undistorted, and thresholded image](docs/thresholding_comparison.jpg)
+
+### 3. Perspective transformation
+
+The perspective transform is implemented in `src/perspective.py`. The source trapezoid for a 1280 × 720 image is:
+
+```text
+top-left      (585, 460)
+top-right     (705, 460)
+bottom-right (1095, 700)
+bottom-left   (240, 700)
+```
+
+I selected these points after comparing several experimental trapezoids. I tested bottom boundaries at y = 650, 700, and 719, and upper boundaries around y = 460, 440, and 425. The combination with y = 460 at the top and y = 700 at the bottom gave better road coverage without the poorer polynomial fits that appeared when the upper boundary was moved farther toward the horizon.
+
+The destination is a rectangle with corners `(320, 0)`, `(960, 0)`, `(960, 719)`, and `(320, 719)`. Both point sets are stored as width/height ratios, allowing them to scale to proportionally resized inputs.
+
+`cv2.getPerspectiveTransform()` calculates the forward matrix `M` and inverse matrix `Minv`. `cv2.warpPerspective()` transforms the 0/1 binary image using nearest-neighbor interpolation, preserving its binary values. `Minv` is retained for projecting the detected lane back onto the road.
+
+The production pipeline does **not** apply a polygon ROI before this transform. I compared the baseline with broad, medium, and tight ROI masks. None of the masks reduced the five existing lane-width warnings or produced a consistent visual improvement, while the narrower masks could remove useful pixels from curved or dashed markings. For that reason, I kept the unmasked binary image.
+
+![Final bird's-eye binary image](docs/perspective_warped_binary.png)
+
+### 4. Lane-pixel detection and polynomial fitting
+
+Lane detection is implemented in `src/lane_detection.py`. A histogram counts nonzero pixels in each column of the lower half of the warped binary image. The strongest peaks in the left and right halves initialize a bottom-up search with nine sliding windows per boundary.
+
+At 1280-pixel width, each window has a default horizontal margin of 70 pixels; the margin scales with image width. When a window contains enough pixels, its next position is recentered on their mean horizontal coordinate. This follows solid markings while also collecting separated sections of dashed markings.
+
+The selected coordinates are independently fitted with:
+
+```text
+x(y) = Ay² + By + C
+```
+
+using `np.polyfit(y, x, 2)`. The implementation requires sufficient pixels and vertical coverage, and it reports an error if the fitted curves cross. I compared sliding-window margins of 70 and 100 pixels. The 70-pixel margin selected fewer unwanted pixels on `test1.jpg` and produced almost identical results on the other representative images, so I kept it as the default. A 100-pixel margin remains available through `--margin 100`. I also tested optional robust refinement, but it did not show a consistent improvement and is therefore not enabled by default.
+
+![Sliding-window pixels and fitted lane polynomials](docs/lane_detection.jpg)
+
+The estimated distance `x_right(y) - x_left(y)` is sampled at several image heights as a diagnostic. With the final perspective configuration, relative sampled-width variations included **1.61%** for `straight_lines1.jpg`, **5.51%** for `straight_lines2.jpg`, **8.95%** for `test1.jpg`, and **11.47%** for `solidYellowCurve.jpg`. These values describe the fitted geometry in warped-image pixels; they are not physical lane-width measurements.
+
+### 5. Radius of curvature and vehicle position
+
+Metric estimates are implemented in `src/lane_measurements.py`. The calculation assumes a lane width of 3.7 m and a visible warped-road length of 30 m. The horizontal meter-per-pixel factor is obtained from the fitted lane width at the bottom of the image, while the vertical factor uses the warped-image height.
+
+After refitting the detected points in meter coordinates, the radius of a second-degree curve is evaluated near the vehicle using:
+
+```text
+R = (1 + (2Ay + B)²)^(3/2) / |2A|
+```
+
+The vehicle center is the horizontal image center. The lane center is the midpoint between the two fitted boundaries at the bottom of the image. Their difference is converted to meters; the sign determines whether the vehicle is left or right of the estimated lane center.
+
+Final estimated offsets included **0.058 m right** for `straight_lines1.jpg`, **0.031 m right** for `straight_lines2.jpg`, **0.101 m left** for `test1.jpg`, and **0.018 m left** for `solidYellowCurve.jpg`.
+
+![Curvature and vehicle-position diagnostics](docs/lane_measurements.jpg)
+
+These values are estimates rather than ground-truth measurements. They depend on the assumed lane dimensions, threshold quality, polynomial fit, and perspective geometry, which explains why the independently calculated left and right curvature radii can differ noticeably.
+
+### 6. Projecting the lane onto the road
+
+`src/lane_overlay.py` evaluates the fitted boundaries for every row of the bird's-eye image and verifies that all coordinates are finite and that the left and right curves do not cross. `cv2.fillPoly()` fills the area between the two curves with green.
+
+The filled polygon and its binary mask are projected into undistorted road coordinates using `Minv`. Blending is applied only where the projected mask is present: the result uses 70% of the undistorted road and 30% of the green layer, while pixels outside the lane remain unchanged.
+
+`src/final_output.py` adds the estimated left and right curvature and vehicle offset to the overlay. Its complete batch mode processed all 17 test images without a failure. Representative straight, curved, and challenging results were visually inspected; the green area generally followed the detected lane boundaries and left the underlying road visible.
+
+![Final lane overlay with curvature and vehicle position](docs/final_output.jpg)
+
+The complete-pipeline contact sheet below provides an additional overview of several inputs and intermediate results.
+
+![Complete pipeline contact sheet](docs/full_pipeline_contact_sheet.jpg)
+
+## Pipeline (video)
+
+### 1. Final video output
+
+Video processing is implemented in `src/process_video.py`. Each frame passes through the same undistortion, thresholding, perspective, measurement, and overlay functions used for still images.
+
+I initialize the first valid frame with the full histogram and sliding-window search. For later frames, the tracker searches around the preceding valid polynomials, assigns overlapping pixels to the closer boundary, checks lane width and center movement, and smooths accepted coefficients over time. When a current detection is unreliable, it can briefly reuse the preceding valid fit and then try to reinitialize with sliding windows.
+
+The default `project_video01.mp4` input has a resolution of 960 × 540 at 25 FPS. The current tracker and reinitialization logic processed all **221 frames**, and I visually inspected the generated result. I also reran `project_video02.mp4` and `project_video03.mp4` to check that the tracking changes had not broken the earlier results; both videos completed successfully.
+
+[View or download the final processed project video](docs/project_video_output.mp4)
+
+I also tested the pipeline on more difficult videos. Two representative results are included below:
+
+- [Processed challenge video 01](docs/challenge01_output.mp4)
+- [Processed challenge video 02 with tracker reinitialization](docs/challenge02_reinitialized_output.mp4)
+
+The challenge videos showed the main limitation of this approach: fixed thresholds and fixed perspective geometry become less reliable with strong shadows, sharp bends, vehicles, and road layouts that differ from the test images. Temporal tracking recovers from many short detection failures, but the overlay can still move noticeably or temporarily reuse an older fit. I used these videos to identify the limitations of the method, while keeping the still-image pipeline unchanged.
+
+## Discussion
+
+### 1. Problems, limitations, and possible improvements
+
+The most difficult part was separating lane markings from objects with similar colors or strong edges. The HLS thresholds retained saturated yellow and bright white pixels well, but road texture, guardrails, vegetation, vehicles, and shadows sometimes remained in the binary image. Sobel X provided useful edge information, although it also responded to some high-contrast background objects.
+
+Choosing the perspective points required several comparisons. Extending the lower source points improved coverage near the vehicle, but moving the upper points farther toward the horizon made the polynomial fits less reliable. I therefore kept the top boundary at y = 460 and selected y = 700 for the bottom boundary. The points are stored proportionally, but one fixed transform cannot be metrically correct for every camera pose and road layout. This limitation appears in the lane-width variation and in differences between the left and right curvature estimates.
+
+I tested several alternatives before selecting the final configuration:
+
+- a 100-pixel sliding-window margin selected more unwanted pixels than the 70-pixel default on some images;
+- robust residual filtering did not provide a clear visual improvement;
+- a polygon mask before perspective transformation clipped useful lane pixels;
+- broad, medium, and tight ROI masks did not consistently reduce width variation or improve final overlays;
+- stricter experimental video tracking reduced responsiveness and failed earlier on a sharp challenge-video curve.
+
+Based on these comparisons, I kept the simpler unmasked binary transform, the standard polynomial fit, and the existing video tracker. Possible improvements include adaptive thresholds, perspective points that adapt to the scene, a clearer confidence measure for each fit, a longer history of accepted video fits, and separate smoothing of the displayed measurements. Metric scale could also be improved by using verified real-world measurements and video from the same calibrated camera.
+
+## Running the project
+
+Create the environment from the repository root:
 
 ```bash
-cd lane-finding
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-## Step 1: Run camera calibration
-
-From the project root, with the virtual environment active:
+Run individual stages:
 
 ```bash
 python src/calibration.py
-```
-
-Visual inspection of the supplied boards shows 10 by 7 squares, corresponding to the default 9 by 6 internal corners expected by OpenCV. If another calibration set is used, the internal-corner dimensions are configurable:
-
-```bash
-python src/calibration.py --corners-x 9 --corners-y 6
-```
-
-Run `python src/calibration.py --help` to see the configurable corner-dimension options.
-
-## Step 2: Correct distortion in a road image
-
-Distortion correction requires the previously generated `calibration_data/calibration.npz` file. The reusable `undistort_image()` function applies `cv2.undistort()` directly using the calibrated camera matrix and distortion coefficients, without `cv2.getOptimalNewCameraMatrix()`. The calibration example in `src/calibration.py` reuses the same function. By default, the program reads `test_images/test1.jpg`:
-
-```bash
 python src/undistort.py
-```
-
-To process a different image, provide its path relative to the project root or as an absolute path:
-
-```bash
-python src/undistort.py --input-image test_images/test2.jpg
-```
-
-Run `python src/undistort.py --help` to view the input-image option. The calibration and output locations remain fixed at `calibration_data/calibration.npz` and `output_images/undistortion/`. When an input has the calibration aspect ratio but a different resolution, the program scales `fx` and `cx` horizontally and `fy` and `cy` vertically before undistortion. This supports proportional sizes such as 1280×720 and 960×540. It assumes the image came from the same calibrated camera and was only resized; an incompatible aspect ratio produces an error.
-
-## Step 3: Create a thresholded binary image
-
-Image thresholding first undistorts the road image using the saved camera parameters. It then detects bright white markings and saturated yellow markings in HLS color space, calculates an X-direction Sobel gradient, and combines the three contributions into a binary lane-marking mask.
-
-From the project root, run:
-
-```bash
 python src/thresholding.py
-```
-
-The default input is `test_images/test1.jpg`. To select another image:
-
-```bash
-python src/thresholding.py --input-image test_images/test2.jpg
-```
-
-The default thresholds are white HLS lightness 200–255 and saturation 0–80; yellow hue 15–35, lightness 30–255, and saturation 80–255; Sobel X magnitude 20–100 with a kernel size of 3; and a minimum lightness of 120 for gradient-only pixels. These values are grouped in `ThresholdConfig` so they can be adjusted in one place. Run `python src/thresholding.py --help` to view the input-image option.
-
-## Step 4: Create a bird's-eye view
-
-The perspective transform maps a trapezoidal lane region in the undistorted road image to a rectangle. `cv2.getPerspectiveTransform()` calculates the forward matrix `M` and inverse matrix `Minv`; `cv2.warpPerspective()` then transforms the combined binary image directly using nearest-neighbor interpolation. No additional polygon ROI mask is applied: comparison tests showed that this mask clipped some useful lane-marking pixels. The inverse matrix will later allow the detected lane boundaries to be projected back onto the road image. On straight-road examples, the transformation makes the lane boundaries appear approximately parallel and prepares the binary image for later lane-pixel and curvature calculations.
-
-Run the default image from the project root:
-
-```bash
 python src/perspective.py
-```
-
-To select another image:
-
-```bash
-python src/perspective.py --input-image test_images/straight_lines1.jpg
-```
-
-The source points are stored as image-size ratios and were selected using the undistorted `straight_lines1.jpg`. Warped binary results were manually inspected on `test1.jpg`, `straight_lines1.jpg`, `straight_lines2.jpg`, and `solidYellowCurve.jpg`. Both boundaries are visible and approximately parallel in the straight-road examples. The `test1.jpg` result contains substantial extra thresholding noise, and the curved-road result contains gaps and noise; geometric accuracy across all scenes has not been established.
-
-## Step 5: Detect lane pixels and fit polynomial curves
-
-`src/lane_detection.py` reuses the existing undistortion, HLS/Sobel thresholding, and **unmasked** perspective transformation. It first sums nonzero pixels in each column of the lower half of the warped binary image. The strongest histogram peaks in the left and right halves provide starting positions for the lane boundaries.
-
-A bottom-up sliding-window search uses **nine windows** for each boundary. The default horizontal search margin is **70 pixels at an image width of 1280 pixels**, scaled proportionally for other widths. Windows are recentered when enough lane-like pixels are available, allowing the search to follow solid or dashed markings. The selected pixel coordinates are independently fitted to second-degree polynomials using `np.polyfit(y, x, 2)`, representing `x(y) = A*y² + B*y + C` for the left and right boundaries. The implementation checks for insufficient usable pixels, insufficient vertical coverage, and crossing fitted curves; a successful fit by itself is not proof of lane-detection accuracy.
-
-Run the default example (`test_images/straight_lines1.jpg`) from the project root:
-
-```bash
 python src/lane_detection.py
+python src/lane_measurements.py
+python src/lane_overlay.py
+python src/final_output.py
 ```
 
-To process another photograph or reproduce the original wider-window experiment:
+Process all test images through the complete still-image pipeline:
 
 ```bash
-python src/lane_detection.py --input-image test_images/test1.jpg
-python src/lane_detection.py --input-image test_images/test1.jpg --margin 100
+python src/process_full_pipeline.py
+python src/final_output.py --all-images
 ```
 
-An optional **experimental** `--robust-refinement` flag fits an initial polynomial, filters unusually large horizontal residuals using a median-absolute-deviation-based threshold, and refits the retained pixels. It is **not enabled by default**, because it did not show a clear improvement in the manual `test1.jpg` comparison.
+Process the default project video:
 
 ```bash
-python src/lane_detection.py --input-image test_images/test1.jpg --robust-refinement
-python src/lane_detection.py --input-image test_images/test1.jpg --margin 70 --robust-refinement
+python src/process_video.py
 ```
 
-The program saves the warped binary image, a visualization of the nine sliding windows and selected lane pixels, and a visualization of the fitted polynomials. It prints the left/right pixel counts and polynomial coefficients. The additional **lane-width diagnostic** evaluates the horizontal distance between the fitted curves at 20%, 50%, 80%, and the bottom of image height, then reports the minimum, maximum, and relative sampled-width variation. These values are **pixels in the transformed image**, not meters, and are diagnostic observations rather than automatic rejection criteria.
+The original `writeup_template.md` is retained unchanged as the supplied project template. The final documentation is this `README.md`, and all images embedded above are stored in `docs/`.
 
-Manual inspection with the default **70-pixel margin** found identifiable left/right boundaries on `straight_lines1.jpg`, `straight_lines2.jpg`, `test1.jpg`, and `solidYellowCurve.jpg`. Sampled-width variations were **2.00%** for `straight_lines1.jpg`, **7.52%** for `test1.jpg`, and **11.81%** for `solidYellowCurve.jpg`. The last two cases warrant caution: `test1.jpg` includes unrelated selected pixels, and the 960×540 `solidYellowCurve.jpg` result also depends on the unverified same-camera-resize assumption. These tests do not establish physical or geometric accuracy on every image.
+## Project structure
 
-## Generated files
-
-- `calibration_data/calibration.npz` stores the camera matrix, distortion coefficients, rotation and translation vectors, RMS reprojection error, image size, chessboard pattern size, and names of successful images.
-- `output_images/calibration/corners/calibration*_corners.jpg` shows the refined corner detections for every successful calibration photograph; `corners_example.jpg` is a stable report-ready copy of the first successful detection.
-- `output_images/calibration/undistorted_example.jpg` is an undistorted calibration photograph.
-- `output_images/calibration/original_vs_undistorted.jpg` places the labelled original and undistorted photographs side by side.
-- `output_images/undistortion/test1_undistorted.jpg` is the corrected default road image.
-- `output_images/undistortion/test1_comparison.jpg` places the labelled original and corrected road images side by side. When a different input is selected, `test1` is replaced by that input file's stem.
-- `output_images/thresholding/test1_white_mask.png` shows pixels selected as white lane markings.
-- `output_images/thresholding/test1_yellow_mask.png` shows pixels selected as yellow lane markings.
-- `output_images/thresholding/test1_sobel_mask.png` shows pixels selected by the X-direction gradient.
-- `output_images/thresholding/test1_binary.png` is the final combined 0/255 binary image.
-- `output_images/thresholding/test1_comparison.jpg` compares the original, undistorted, and combined binary images. With another input, `test1` is replaced by that file's stem.
-- `output_images/perspective/test1_source_points.jpg` shows the proposed source quadrilateral on the undistorted road image.
-- `output_images/perspective/test1_warped_binary.png` is the transformed bird's-eye binary image.
-- `output_images/perspective/test1_warped_road.jpg` shows the undistorted color road transformed with the same perspective matrix.
-- `output_images/perspective/test1_comparison.jpg` compares the thresholded binary image with its bird's-eye view. With another input, `test1` is replaced by that file's stem.
-- `output_images/lane_detection/straight_lines1_warped_binary.png` shows the binary input used by Step 5 (using the default photograph).
-- `output_images/lane_detection/straight_lines1_sliding_windows.jpg` shows sliding windows and selected left/right lane pixels.
-- `output_images/lane_detection/straight_lines1_polynomial_fit.jpg` shows the left/right selected pixels and fitted polynomial curves. For other inputs, the stem changes; experimental configurations add suffixes such as `_margin100_` or `_robust_`.
-
-The terminal output reports the number of readable calibration images processed, the number of successful detections, the camera matrix, distortion coefficients, RMS reprojection error, and saved-file locations. Images that cannot be read, have a different resolution, or do not contain the complete requested pattern are skipped with a warning.
-
-## Check the calibration result
-
-1. Confirm that the successful-detection count includes most of the readable input photographs. A few unsuccessful photographs can be normal if the entire pattern is not visible.
-2. Inspect every generated corner image. The colored overlay should follow the actual internal chessboard intersections in the correct order.
-3. Open the side-by-side comparison. Straight chessboard edges should look straighter after undistortion, particularly near the image boundaries, without implausible warping.
-4. Confirm that `calibration.npz` was created and that the printed camera matrix and distortion coefficients contain finite values.
-5. Record the printed detection counts and RMS reprojection error in `writeup.md`. A lower RMS error generally indicates better agreement, but visual inspection and a diverse set of board positions are also important.
-
-## Check road-image distortion correction
-
-1. Check the input image dimensions. If they differ from the calibration resolution, verify that the image was proportionally resized from the same calibrated camera.
-2. Open `test1_undistorted.jpg` and confirm that it is complete and free from unexpected artifacts.
-3. Inspect `test1_comparison.jpg`, concentrating on straight structures and lane markings near the image edges, where lens correction is usually most visible.
-4. Confirm that the original file in `test_images/` remains unchanged.
-
-## Check image thresholding
-
-1. Inspect the white and yellow masks separately and confirm that each selects the intended lane-marking color.
-2. Check that the Sobel mask emphasizes mostly vertical or diagonal lane edges without overwhelming background texture.
-3. Inspect the final binary mask for continuous lane evidence on both sides of the vehicle and limited noise in the road surface, sky, vegetation, and vehicles.
-4. Use the labelled comparison to confirm that selected pixels align with the visible lane markings in the undistorted image.
-5. If necessary, adjust the threshold values in ThresholdConfig and rerun the program.
-
-Steps 1–3 were manually inspected on representative road and calibration images after the distortion-correction change. Step 4 was visually inspected on `straight_lines1.jpg`, `straight_lines2.jpg`, `test1.jpg`, and `solidYellowCurve.jpg`. The batch pipeline processed all 17 images, including 960×540 inputs, without reported errors; that does not verify correct camera calibration or perspective geometry for every image. Intrinsic-matrix scaling is appropriate only when the image comes from the calibrated camera and was subsequently resized.
-
-## Check the perspective transform
-
-1. Inspect the source-point image and confirm that the quadrilateral follows the lane boundaries on the road surface.
-2. Inspect the warped binary image and confirm that straight lane boundaries appear approximately vertical and parallel.
-3. Check that the transform retains useful lane pixels without placing unrelated road regions inside the main warped lane area.
-4. Adjust the clearly defined point ratios in `src/perspective.py` if the initial geometry is not suitable across the test images.
-
-Some thresholding noise can remain, and expanding the source trapezoid can introduce visible stretching or blurring. Perspective geometry must therefore be inspected for each substantially different road view before later lane measurements are trusted.
-
-## Check lane detection and polynomial fitting
-
-1. Open `<stem>_sliding_windows.jpg` and confirm that the windows track the **two boundaries of the vehicle's own lane**, not unrelated road markings or noise.
-2. Open `<stem>_polynomial_fit.jpg` and verify that both fitted curves follow the selected marking pixels, including the gaps in dashed lines.
-3. Read the terminal pixel counts and polynomial coefficients; visually check the fit instead of equating more/fewer pixels with better quality.
-4. Compare the lane-width values at different image heights. Large variations can suggest imperfect detection or perspective geometry, but the numbers are diagnostics, **not** evidence of a physically calibrated lane width.
-5. For challenging scenes, compare `--margin 70` with `--margin 100` and, if useful, the optional `--robust-refinement` result. Experimental output names differ so the default images are preserved.
-
-## Batch Processing
-
-`process_all_images.py` loads the existing `calibration_data/calibration.npz` once, finds every JPG image in `test_images/`, and applies distortion correction, combined thresholding, the perspective transform, and the standard Step 5 lane detection without recalculating camera calibration. Lane detection uses the default 70-pixel sliding-window margin and the standard polynomial fit without optional robust refinement.
-
-Run it from the project root:
-
-```bash
-python src/process_all_images.py
+```text
+lane-finding/
+├── camera_cal/                 # Chessboard calibration inputs
+├── calibration_data/
+│   └── calibration.npz         # Saved calibration parameters
+├── docs/                       # README images and representative videos
+├── output_images/              # Complete generated image results
+├── src/
+│   ├── calibration.py
+│   ├── undistort.py
+│   ├── thresholding.py
+│   ├── perspective.py
+│   ├── lane_detection.py
+│   ├── lane_measurements.py
+│   ├── lane_overlay.py
+│   ├── final_output.py
+│   ├── process_full_pipeline.py
+│   └── process_video.py
+├── test_images/
+├── test_videos/
+├── README.md
+├── requirements.txt
+└── writeup_template.md
 ```
-
-For every successfully processed input, the script saves the original, undistorted, combined binary, bird's-eye binary, sliding-window, and polynomial-fit images in `output_images/batch/`. It also creates numbered contact sheets with one row per successfully processed photograph. A failure is reported with its reason without stopping the remaining images. The batch pipeline successfully processed all 17 test images, and representative straight, curved, and challenging examples were visually inspected. The remaining images were not all individually validated, so successful processing does not imply perfect lane detection on every image.

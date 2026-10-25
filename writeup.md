@@ -164,8 +164,10 @@ The default `project_video01.mp4` input has a resolution of 960 × 540 at 25 FPS
 
 I also tested the pipeline on more difficult videos. Two representative results are included below:
 
-- [Processed challenge video 01](docs/challenge01_output.mp4)
+- [Processed challenge video 01 with tracker reinitialization](docs/challenge01_reinitialized_output.mp4)
 - [Processed challenge video 02 with tracker reinitialization](docs/challenge02_reinitialized_output.mp4)
+
+All six final video results generated with the current tracker and reinitialization logic are also available in `output_video/`. This folder contains the three project videos and the three challenge videos, while the links above show the most important representative results.
 
 The challenge videos showed the main limitation of this approach: fixed thresholds and fixed perspective geometry become less reliable with strong shadows, sharp bends, vehicles, and road layouts that differ from the test images. Temporal tracking recovers from many short detection failures, but the overlay can still move noticeably or temporarily reuse an older fit. I used these videos to identify the limitations of the method, while keeping the still-image pipeline unchanged.
 
@@ -234,6 +236,7 @@ lane-finding/
 │   └── calibration.npz         # Saved calibration parameters
 ├── docs/                       # README images and representative videos
 ├── output_images/              # Complete generated image results
+├── output_video/               # Final reinitialized video results
 ├── src/
 │   ├── calibration.py
 │   ├── undistort.py

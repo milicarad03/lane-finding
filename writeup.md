@@ -225,15 +225,13 @@ Process the default project video:
 python src/process_video.py
 ```
 
-The original `writeup_template.md` is retained unchanged as the supplied project template. The final documentation is this `README.md`, and all images embedded above are stored in `docs/`.
+The original `writeup_template.md` is retained unchanged as the supplied project template. The final project documentation is provided in `README.md`, and all images embedded above are stored in `docs/`.
 
 ## Generated results
 
 `output_images/` contains the generated still-image results, organized by pipeline stage. It includes calibration and undistortion examples, threshold masks, perspective transforms, sliding-window and polynomial-fit visualizations, lane measurements, final overlays, batch results, and contact sheets.
 
 `output_video/` contains the six final videos generated with the current tracking and reinitialization logic: three project videos and three challenge videos. The `docs/` directory contains only the representative images and videos linked directly from this documentation.
-
-The local `output_videos/` directory is used for intermediate and older generated video versions and is not included in the GitHub repository.
 
 ## Project structure
 
@@ -254,11 +252,13 @@ lane-finding/
 │   ├── lane_measurements.py
 │   ├── lane_overlay.py
 │   ├── final_output.py
+│   ├── process_all_images.py
 │   ├── process_full_pipeline.py
 │   └── process_video.py
 ├── test_images/
 ├── test_videos/
 ├── README.md
 ├── requirements.txt
+├── writeup.md
 └── writeup_template.md
 ```
